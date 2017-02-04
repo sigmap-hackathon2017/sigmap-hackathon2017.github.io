@@ -115,8 +115,7 @@
       init: function() {
         var seq = O.Triggers.Sequential();
 
-        var baseurl = this.baseurl = 'http://{a-c}.tile.opentopomap.org/{z}/{x}/{y}.png';
-//        var baseurl = this.baseurl = 'http://localhost:8081/{z}/{x}/{y}.png';
+        var baseurl = this.baseurl = 'http://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
         var map = this.map = L.map('map').setView([0, 0.0], 4);
         var basemap = this.basemap = L.tileLayer(baseurl, {
           attribution: 'data OSM - map CartoDB'
@@ -146,7 +145,7 @@
         this.story.clear();
 
         if (this.baseurl && (this.baseurl !== actions.global.baseurl)) {
-          this.baseurl = actions.global.baseurl || 'http://localhost:8081/{z}/{x}/{y}.png';
+          this.baseurl = actions.global.baseurl || 'http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
           this.basemap.setUrl(this.baseurl);
         }
@@ -247,7 +246,7 @@
 
 <script id="md_template" type="text/template">
 ```
--baseurl: "http://localhost:8081/{z}/{x}/{y}.png"
+-baseurl: "http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 -title: "Déplacements du Président de la République accompagné du Ministre des Affaires étrangères de 2012 à 2015"
 -author: "MAEDI - Hackarto2017"
 ```
