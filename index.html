@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="utf-8">
+  <title>Sigmap - Hackathon 2017 - Quai d'Orsay numérique</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link href="node_modules/font-awesome/css/font-awesome.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="assets/vendor/v3.20.1-dist/ol.css" type="text/css">
+  <link rel="stylesheet" href="assets/vendor/sidebar-v2/css/ol3-sidebar.css" />
+  <link rel="stylesheet" href="assets/css/vanilla-modal-custom.css">
+  <link rel=stylesheet href="assets/css/d3.slider.css" />
+  <link rel="stylesheet" href="node_modules/vega-tooltip/src/vg-tooltip.css">
+  <link rel="stylesheet" href="assets/vendor/ol3-popup/ol3-popup.css">
+  <link rel=stylesheet href="assets/vendor/fira/fira.css" />
+  <link rel=stylesheet href="assets/css/main.css" />
+  <script src="node_modules/vanilla-modal/dist/index.js"></script>
+  <script src="assets/vendor/vega/d3.min.js"></script>
+  <script src="assets/vendor/vega/vega.js"></script>
+  <script src="assets/vendor/tinycolor/tinycolor-min.js"></script>
+  <link rel="author" href="humans.txt" />
+</head>
+
+<body>
+  <!-- Place réservé pour le Tooltip Diagramme visa/sexe-->
+  <div id="vis-tooltip" class="vg-tooltip"></div>
+  <div id="sidebar" class="sidebar collapsed">
+    <!-- Nav tabs -->
+    <div class="sidebar-tabs">
+      <ul role="tablist">
+        <li><a href="#home" role="tab" title="Accueil"><i class="fa fa-home"></i></a></li>
+        <li><a href="#visa" role="tab" title="Délivrances Visa"><i class="fa fa-flag"></i></a></li>
+        <li><a href="#cef" role="tab" title="Études en France"><i class="fa fa-graduation-cap"></i></a></li>
+        <li><a href="#ocde" role="tab" title="OCDE"><i
+						class="fa fa-flag-checkered"></i></a></li>
+      </ul>
+
+      <ul role="tablist">
+        <li><a href="#settings" role="tab"><i class="fa fa-gear"></i></a></li>
+      </ul>
+    </div>
+
+    <!-- Tab panes -->
+    <div class="sidebar-content">
+      <div class="sidebar-pane" id="home">
+        <h1 class="sidebar-header">
+          Quai d'Orsay Numérique<span class="sidebar-close"><i
+                        class="fa fa-caret-left"></i></span>
+        </h1>
+
+        <p><img alt="Logo Quai d'Orsay numérique" src="images/logo_soiree_quai_orsay_numerique.png" width="400px"></p>
+
+        <p>Projet réalisé à l'occasion du Hackathon organisé par le Ministère des Affaires étrangères et du Développement International.</p>
+
+        <h2>Origine des Données</h2>
+        <p>Données obtenues à partir du site data.gouv.fr.</p>
+        <p><a href="http://www.data.gouv.fr/fr/organizations/ministere-des-affaires-etrangeres-et-du-developpement-international/#datasets">Données du ministère des Affaires étrangères sur Data.gouv.fr</a></p>
+
+        <h2>Cartographies réalisées</h2>
+        <p>
+        <ul role="tablist">
+            <li><a href="#visa" role="tab" onclick="openSideBar('visa');"><i class="fa fa-flag"></i> Délivrance de Visas</a></li>
+            <li><a href="#cef" role="tab" onclick="openSideBar('cef');"><i class="fa fa-graduation-cap"></i> Etude en France</a></li>
+            <li><a href="#ocde" role="tab" onclick="openSideBar('ocde');"><i class="fa fa-flag-checkered"></i> OCDE: Base de données des migrations internaionales</a></li>
+        </ul>
+        </p>
+        <h2>Déplacements du Présidents de la République et Ministre des Affaires étrangères entre 2012 et 2015</h2>
+        <p>
+            Déplacements par zone géographique:
+            <ul>
+                <li><a href="odyssey/AME.html" target="_blank" >Amériques et Caraïbes</a></li>
+                <li><a href="odyssey/ANMO.html" target="_blank">Afrique du nord - Moyen Orient</a></li>
+                <li><a href="odyssey/ASIE.html" target="_blank">Asie - Océanie</a></li>
+                <li><a href="odyssey/DAOI.html" target="_blank">Afrique - Océan indien</a></li>
+                <li><a href="odyssey/EUROOCC.html" target="_blank">Europe occidentale</a></li>
+                <li><a href="odyssey/EUROORI.html" target="_blank">Europe orientale</a></li>
+            </ul>
+        </p>
+
+      </div>
+      <div class="sidebar-pane" id="visa">
+        <h1 class="sidebar-header">
+          Délivrance de visas <span class="sidebar-close"><i
+						class="fa fa-caret-left"></i></span>
+        </h1>
+        <h2>Données brutes pour création de statistiques sur les visas délivrés par la France de 2006 à 2016</h2>
+        <p>
+        <ul>
+            <li>Ce jeu de données permet d'accéder aux nombres de visas journaliers délivrés par la France de 2006 à 2016,</li>
+            <li>A l'évolution des visas délivrés par la France en fonction du type de visa, des pays, des tranches d'âges, etc.</li>
+            <li>La base de données se compose de tables référentielles (pays, calendrier, sexe, etc.) et d'une table centrale (visa délivré et identifiant vers les tables référentielles)</li>
+        </ul>
+        </p>
+        <hr/>
+        <h2>Origine des Données</h2>
+        <p><a target="_blank" href="http://www.data.gouv.fr/fr/datasets/donnees-brutes-pour-creation-de-statistiques-sur-les-visas-delivres-par-la-france-de-2006-a-2016/">Données du ministère des Affaires étrangères sur Data.gouv.fr</a></p>
+        <hr/>
+        <h1 id="lblCountry"></h1>
+        <p>
+          <div id="vis"></div>
+        </p>
+        <div id="world-hide-show">
+          <hr/>
+          <h2>Répartition femme/homme des Visas sur la période 2006 - 2016</h2>
+          <a href="#pyramide-container" rel="modal:open"> <img id="pyramide" src="images/miniatures/pyramide_des_ages_monde_periode_complete.png" /></a>
+          <div id="vis-treemap-full" class="vg-tooltip"></div>
+          <hr/>
+          <h2>Motifs des Visas sur la période 2006 - 2016</h2>
+          <a href="#visa-motif-container" rel="modal:open"><img id="img-visa-motif"/></a>
+          <div id="visa-motif" style="display:none;"></div>
+          </div>
+      </div>
+
+      <div class="sidebar-pane" id="cef">
+        <h1 class="sidebar-header">
+          Études en France<span class="sidebar-close"><i
+						class="fa fa-caret-left"></i></span>
+        </h1>
+        <h2>Données brutes sur la mobilité d'étudiants étrangers souhaitant étudier dans l’enseignement supérieur français de janvier 2007 à octobre 2015</h2>
+        <p>Ce jeu de données permet de créer des statistiques sur une période allant de janvier 2007 à octobre 2015 sur la mobilité des étudiants étrangers soumis à visa souhaitant venir étudier dans l’enseignement supérieur français. Le recueil provient de l’application Centre pour les études en France. La nature des données permet d’explorer entre autre :
+        <ul>
+            <li>Le profil des étudiants qui candidatent,</li>
+            <li>Les origines géographiques,</li>
+            <li>Les niveaux de formations locaux des étudiants,</li>
+            <li>L’offre de formations visée dans l’enseignement supérieur français,</li>
+            <li>Les destinations privilégiées,</li>
+            <li>Les évolutions durant ces 9 campagnes de candidatures.</li>
+        </ul>
+        </p>
+        <hr/>
+        <h2>Origine des Données</h2>
+        <p><a target="_blank" href="http://www.data.gouv.fr/fr/datasets/donnees-brutes-sur-la-mobilite-detudiants-etrangers-souhaitant-etudier-dans-lenseignement-superieur-francais-de-janvier-2007-a-octobre-2015/">Données du ministère des Affaires étrangères sur Data.gouv.fr</a></p>
+        <hr/>
+        <h2>Diagramme global: Domaine principal d'études</h2>
+        <p>
+          <a href="#domaine-etudes-principal-container" rel="modal:open"><img id="img-domaine-etudes-principal"/></a>
+          <div id="domaine-etudes-principal" style="display:none;"></div>
+        </p>
+      </div>
+
+      <div class="sidebar-pane" id="ocde">
+        <h1 class="sidebar-header">
+          OCDE<span class="sidebar-close"><i class="fa fa-caret-left"></i></span>
+        </h1>
+        <h2>Base de données sur les migrations internationales</h2>
+        <p>
+        </p>
+        <h2>Origine des Données</h2>
+        <p><a href="http://stats.oecd.org/Index.aspx?DataSetCode=MIG">Données statistiques des migrations sur stats.oecd.org</a>
+        <p id="lblRankFrance"></p>
+        <hr/>
+        <p>
+          <a href="#ranking-container" rel="modal:open"><img id="img_ranking" src="images/miniatures/not_found.png" /></a>
+          <div id="ranking" style="display:none;"></div>
+        </p>
+        <hr/>
+        <h2>Répartition des migrations vers la France par pays d'origine (par année)</h2>
+        <p>
+          <a href="#treemap-container" rel="modal:open"><img id="img_treemap" src="images/miniatures/not_found.png" /></a>
+          <div id="treemap" style="display:none;"></div>
+        </p>
+
+      </div>
+      <!-- Place réservé pour le Tooltip Treemap-->
+      <div id="vis-treemap-full" class="vg-tooltip"></div>
+
+      <div class="sidebar-pane" id="settings">
+        <h1 class="sidebar-header">
+          Crédits<span class="sidebar-close"><i
+						class="fa fa-caret-left"></i></span>
+        </h1>
+      </div>
+    </div>
+  </div>
+
+  <div id="map" class="sidebar-map">
+    <div id="tooltip" class="tooltip"></div>
+    <div id="popup"></div>
+  </div>
+  <div id="pyramide-container" style="display: none; text-align: center;">
+    <div id="pyramide-full">
+      <h2 class="titlePopup" id="lblPyramidePopup"></h2>
+      <div id="pyramide-full-canvas"></div>
+    </div>
+  </div>
+
+  <div id="visa-motif-container" style="display: none; text-align: center;">
+    <div id="visa-motif-full">
+      <h2 class="titlePopup" id="lblVisaMotifPopup"></h2>
+      <div id="visa-motif-full-canvas"></div>
+    </div>
+  </div>
+
+  <div id="treemap-container" style="display: none; text-align: center;">
+    <div id="treemap-full">
+      <h2 class="titlePopup" id="lblTreemapPopup"></h2>
+      <div id="treemap-full-canvas"></div>
+    </div>
+  </div>
+
+  <div id="ranking-container" style="display: none; text-align: center;">
+    <div id="ranking-full">
+      <h2 class="titlePopup" id="lblRankPopup"></h2>
+      <div id="ranking-full-canvas"></div>
+    </div>
+  </div>
+
+  <div id="domaine-etudes-principal-container" style="display: none; text-align: center;">
+    <div id="domaine-etudes-principal-full">
+      <h2 class="titlePopup" id="lblDomaineEtudesPopup"></h2>
+      <div id="domaine-etudes-principal-full-canvas"></div>
+    </div>
+  </div>
+
+  <div class="modal">
+    <div class="modal-inner">
+      <a rel="modal:close">&times;</a>
+      <div class="modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Lié à OpenLayers 3 -->
+  <script src="assets/vendor/v3.20.1-dist/ol.js" type="text/javascript"></script>
+  <script src="assets/vendor/sidebar-v2/js/ol3-sidebar.js"></script>
+  <script src="assets/vendor/ol3-popup/ol3-popup.js"></script>
+  <!-- Lié à D3/Vega -->
+  <script src="assets/vendor/d3Slider/d3.slider.js"></script>
+  <!-- Code applicatif -->
+  <script src="assets/js/indicate_context_per_year.js"></script>
+  <script src="assets/js/conf/diag_circulaire.js"></script>
+  <script src="assets/js/conf/treemap.js"></script>
+  <script src="assets/js/conf/bar_ranking.js"></script>
+  <script src="assets/js/conf/domaine_etudes_principal.js"></script>
+  <script src="assets/js/conf/visa_motif.js"></script>
+  <script src="assets/js/main.js"></script>
+  <script src="node_modules/vega-tooltip/src/vg-tooltip.js"></script>
+</body>
+</html>

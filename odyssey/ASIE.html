@@ -1,0 +1,504 @@
+<!doctype><html><head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Odyssey.js Slides</title>
+  <meta name="description" content="" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="icon" type="image/x-icon" href="images/favicon.png" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+
+  <link rel="stylesheet" href="vendor/cartodb/v3/themes/css/cartodb.css" />
+  <link rel="stylesheet" href="vendor/odyssey/sandbox/css/slides.css" />
+
+  <link rel="stylesheet" href="css/custom.css" />
+
+  <script src="vendor/modernizr-2.6.2.min.js"></script>
+</head>
+<body>
+  <div id="map" style="width: 100%; height: 100%;"></div>
+
+  <div id="slides_container" style="display:block;">
+    <div id="dots"></div>
+
+    <div id="slides"></div>
+
+    <ul id="navButtons">
+      <li><a class="prev"></a></li>
+      <li><a class="next"></a></li>
+    </ul>
+  </div>
+
+  <div id="credits">
+    <span class="title" id="title">Hackathon 2017</span>
+    <span class="author"><strong id="author">By Name using</strong> <a href="http://cartodb.github.io/odyssey.js/">Odyssey.js</a><span>
+  </span></span></div>
+
+  <script src="vendor/cartodb/v3/cartodb.js"></script>
+  <script src="vendor/odyssey/odyssey.js" charset="UTF-8"></script>
+
+  <script>
+    var resizePID;
+
+    function clearResize() {
+      clearTimeout(resizePID);
+      resizePID = setTimeout(function() { adjustSlides(); }, 100);
+    }
+
+    if (!window.addEventListener) {
+      window.attachEvent("resize", function load(event) {
+        clearResize();
+      });
+    } else {
+      window.addEventListener("resize", function load(event) {
+        clearResize();
+      });
+    }
+
+    function adjustSlides() {
+      var container = document.getElementById("slides_container"),
+          slide = document.querySelectorAll('.selected_slide')[0];
+
+      if (slide) {
+        if (slide.offsetHeight+169+40+80 >= window.innerHeight) {
+          container.style.bottom = "80px";
+
+          var h = container.offsetHeight;
+
+          slide.style.height = h-169+"px";
+          slide.classList.add("scrolled");
+        } else {
+          container.style.bottom = "auto";
+          container.style.minHeight = "0";
+
+          slide.style.height = "auto";
+          slide.classList.remove("scrolled");
+        }
+      }
+    }
+
+    var resizeAction = O.Action(function() {
+      function imageLoaded() {
+        counter--;
+
+        if (counter === 0) {
+          adjustSlides();
+        }
+      }
+      var images = $('img');
+      var counter = images.length;
+
+      images.each(function() {
+        if (this.complete) {
+          imageLoaded.call( this );
+        } else {
+          $(this).one('load', imageLoaded);
+        }
+      });
+    });
+
+    function click(el) {
+      var element = O.Core.getElement(el);
+      var t = O.Trigger();
+
+      // TODO: clean properly
+      function click() {
+        t.trigger();
+      }
+
+      if (element) element.onclick = click;
+
+      return t;
+    }
+
+    O.Template({
+      init: function() {
+        var seq = O.Triggers.Sequential();
+
+        var baseurl = this.baseurl = 'http://{a-c}.tile.opentopomap.org/{z}/{x}/{y}.png';
+//        var baseurl = this.baseurl = 'http://localhost:8081/{z}/{x}/{y}.png';
+        var map = this.map = L.map('map').setView([0, 0.0], 4);
+        var basemap = this.basemap = L.tileLayer(baseurl, {
+          attribution: 'data OSM - map CartoDB'
+        }).addTo(map);
+
+        // enanle keys to move
+        O.Keys().on('map').left().then(seq.prev, seq)
+        O.Keys().on('map').right().then(seq.next, seq)
+
+        click(document.querySelectorAll('.next')).then(seq.next, seq)
+        click(document.querySelectorAll('.prev')).then(seq.prev, seq)
+
+        var slides = O.Actions.Slides('slides');
+        var story = O.Story()
+
+        this.story = story;
+        this.seq = seq;
+        this.slides = slides;
+        this.progress = O.UI.DotProgress('dots').count(0);
+      },
+
+      update: function(actions) {
+        var self = this;
+
+        if (!actions.length) return;
+
+        this.story.clear();
+
+        if (this.baseurl && (this.baseurl !== actions.global.baseurl)) {
+          this.baseurl = actions.global.baseurl || 'http://localhost:8081/{z}/{x}/{y}.png';
+
+          this.basemap.setUrl(this.baseurl);
+        }
+
+        if (this.cartoDBLayer && ("http://"+self.cartoDBLayer.options.user_name+".cartodb.com/api/v2/viz/"+self.cartoDBLayer.options.layer_definition.stat_tag+"/viz.json" !== actions.global.vizjson)) {
+          this.map.removeLayer(this.cartoDBLayer);
+
+          this.cartoDBLayer = null;
+          this.created = false;
+        }
+
+        if (actions.global.vizjson && !this.cartoDBLayer) {
+          if (!this.created) { // sendCode debounce < vis loader
+            cdb.vis.Loader.get(actions.global.vizjson, function(vizjson) {
+              self.map.fitBounds(vizjson.bounds);
+
+              cartodb.createLayer(self.map, vizjson)
+                .done(function(layer) {
+                  self.cartoDBLayer = layer;
+
+                  var sublayer = layer.getSubLayer(0),
+                      layer_name = layer.layers[0].options.layer_name,
+                      filter = actions.global.cartodb_filter ? " WHERE "+actions.global.cartodb_filter : "";
+
+                  sublayer.setSQL("SELECT * FROM "+layer_name+filter)
+
+                  self.map.addLayer(layer);
+
+                  self._resetActions(actions);
+                }).on('error', function(err) {
+                  console.log("some error occurred: " + err);
+                });
+            });
+
+            this.created = true;
+          }
+
+          return;
+        }
+
+        this._resetActions(actions);
+      },
+
+      _resetActions: function(actions) {
+        // update footer title and author
+        var title_ = actions.global.title === undefined ? '' : actions.global.title,
+            author_ = actions.global.author === undefined ? 'Using' : 'By '+actions.global.author+' using';
+
+        document.getElementById('title').innerHTML = title_;
+        document.getElementById('author').innerHTML = author_;
+        document.title = title_ + " | " + author_ +' Odyssey.js';
+
+        var sl = actions;
+
+        document.getElementById('slides').innerHTML = ''
+        this.progress.count(sl.length);
+
+        // create new story
+        for(var i = 0; i < sl.length; ++i) {
+          var slide = sl[i];
+          var tmpl = "<div class='slide' style='diplay:none'>";
+
+          tmpl += slide.html();
+          tmpl += "</div>";
+          document.getElementById('slides').innerHTML += tmpl;
+
+          this.progress.step(i).then(this.seq.step(i), this.seq)
+
+          var actions = O.Parallel(
+            this.slides.activate(i),
+            slide(this),
+            this.progress.activate(i),
+            resizeAction
+          );
+
+          actions.on("finish.app", function() {
+            adjustSlides();
+          });
+
+          this.story.addState(
+            this.seq.step(i),
+            actions
+          )
+        }
+
+        this.story.go(this.seq.current());
+      },
+
+      changeSlide: function(n) {
+        this.seq.current(n);
+      }
+    });
+  </script>
+
+<!--
+  -baseurl: "http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+  -->
+
+<script id="md_template" type="text/template">
+```
+-baseurl: "http://localhost:8081/{z}/{x}/{y}.png"
+-title: "Déplacements du Président de la République accompagné du Ministre des Affaires étrangères de 2012 à 2015"
+-author: "MAEDI - Hackarto2017"
+```
+
+#Quai d'Orsay Numérique
+```
+- center: [47.2186371, -1.5541361]
+- zoom: 6
+L.marker([48.8566101,2.3514992]).actions.addRemove(S.map)
+```
+
+![Logo Quai d'Orsay numérique](images/logo_soiree_quai_orsay_numerique.png)
+
+Projet réalisé à l'occasion du Hackathon organisé par le Ministère des Affaires étrangères et du Développement Internationnal.
+
+## Origine des Données
+
+Données obtenues à partir du site data.gouv.fr.
+
+[Déplacements du ministre des Affaires étrangères du 18 mai 2012 au 12 février 2015](http://www.data.gouv.fr/fr/datasets/deplacements-du-ministre-des-affaires-etrangeres-du-18-mai-2012-au-12-fevrier-2015/)
+
+#Asie – Océanie
+```
+- center: [19.0, 28.0]
+- zoom: 3
+```
+
+* 24/05/2012 - Visite bilatérale du Président de la République, KABOUL, AFGHANISTAN
+
+```
+L.marker([34.5260131, 69.1776476]).actions.addRemove(S.map)
+```
+
+* 05/11/2012 - Rencontres bilatérales, VIENTIANE, LAOS
+
+```
+L.marker([17.9640988, 102.6133707]).actions.addRemove(S.map)
+```
+
+* 14/02/2013 - Visite de travail du Président de la République, NEW DELHI, INDE
+
+```
+L.marker([28.6138967, 77.2159562]).actions.addRemove(S.map)
+```
+
+* 15/02/2013 - Visite de travail du Président de la République, BOMBAY, INDE
+
+```
+L.marker([18.9321862, 72.8308337]).actions.addRemove(S.map)
+```
+
+* 25/04/2013 - Visite de travail du Président de la République, PEKIN, CHINE
+
+```
+L.marker([39.9059631, 116.391248]).actions.addRemove(S.map)
+```
+
+* 26/04/2013 - Visite de travail du Président de la République, SHANGHAI, CHINE
+
+```
+L.marker([31.2253441, 121.4888922]).actions.addRemove(S.map)
+```
+
+* 05/06/2013 - Visite de travail du Président de la République, TOKYO, JAPON
+
+```
+L.marker([34.2255804, 139.294774527]).actions.addRemove(S.map)
+```
+
+* 16/10/2014 - Sommet de l’ASEM, MILAN, ITALIE
+
+```
+L.marker([45.4667971, 9.1904984]).actions.addRemove(S.map)
+```
+
+* 17/11/2014 - Visite officielle du Président de la République, NOUMÉA, NOUVELLE CALÉDONIE
+
+```
+L.marker([-22.2745263, 166.442419]).actions.addRemove(S.map)
+```
+
+* 18/11/2014 - Visite d'état du Président de la République, SYDNEY, AUSTRALIE
+
+```
+L.marker([-33.8679573, 151.210047]).actions.addRemove(S.map)
+```
+
+* 19/11/2014 - Visite d'état du Président de la République, CANBERRA, AUSTRALIE
+
+```
+L.marker([-35.2975905, 149.1012676]).actions.addRemove(S.map)
+```
+
+* 06/02/2015 - Déplacement avec le Président de la République sur la crise en Ukraine, MOSCOU, RUSSIE
+
+```
+L.marker([55.7506828, 37.6174976]).actions.addRemove(S.map)
+```
+
+* 11/02/2015 - Sommet de Minsk, MINSK, BIELORUSSIE
+
+```
+L.marker([53.902334, 27.5618791]).actions.addRemove(S.map)
+```
+#Visite bilatérale du Président de la République
+```
+-center: [34.5260131, 69.1776476]
+-zoom: 7
+L.marker([34.5260131, 69.1776476]).actions.addRemove(S.map)
+```
+
+KABOUL, AFGHANISTAN, 24/05/2012
+
+Après s'être rendu dans la matinée auprès des soldats français dans la province de Kapisa, à Nijrab, le chef de l'Etat est arrivé à Kaboul pour y rencontrer le président afghan, M. Hamid Karzaï, des représentants de la société civile afghane et la communauté française devant laquelle il prononcera une allocution.
+
+#Rencontres bilatérales
+```
+-center: [17.9640988, 102.6133707]
+-zoom: 7
+L.marker([17.9640988, 102.6133707]).actions.addRemove(S.map)
+```
+
+VIENTIANE, LAOS, 05/11/2012
+
+#Visite de travail du Président de la République
+```
+-center: [28.6138967, 77.2159562]
+-zoom: 7
+L.marker([28.6138967, 77.2159562]).actions.addRemove(S.map)
+```
+
+NEW DELHI, INDE, 14/02/2013
+
+#Visite de travail du Président de la République
+```
+-center: [18.9321862, 72.8308337]
+-zoom: 7
+L.marker([18.9321862, 72.8308337]).actions.addRemove(S.map)
+```
+
+BOMBAY, INDE, 15/02/2013
+
+#Visite de travail du Président de la République
+```
+-center: [39.9059631, 116.391248]
+-zoom: 7
+L.marker([39.9059631, 116.391248]).actions.addRemove(S.map)
+```
+
+PEKIN, CHINE, 25/04/2013
+
+![Signature accords pour l'enseignement supérieur et la recherche](images/PEKIN_20130425.jpg)
+
+Dans le cadre de la visite d'Etat du Président de la République en Chine, Geneviève Fioraso a présidé à la signature de onze accords visant à renforcer les partenariats entre la France et la Chine dans le domaine de l'enseignement supérieur, de la recherche et de l'innovation.
+
+[11 accords signés à Pékin pour l'enseignement supérieur et la recherche](http://www.enseignementsup-recherche.gouv.fr/cid71672/11-accords-signes-a-pekin-pour-l-enseignement-superieur-et-la-recherche.html)
+
+#Visite de travail du Président de la République
+```
+-center: [31.2253441, 121.4888922]
+-zoom: 7
+L.marker([31.2253441, 121.4888922]).actions.addRemove(S.map)
+```
+
+SHANGHAI, CHINE, 26/04/2013
+
+À Shanghai, en République populaire de Chine, le président de la République a tenu un discours à l'occasion de l'inauguration de l’école d’ingénieurs PARIS TECH-SHANGHAI JIAO TONG.
+
+[Vidéo de l’allocution](http://www.dailymotion.com/embed/video/xzcgy3?hideInfos=1&related=0&wmode=opaque&info=0)
+
+#Visite de travail du Président de la République
+```
+-center: [34.2255804, 139.294774527]
+-zoom: 7
+L.marker([34.2255804, 139.294774527]).actions.addRemove(S.map)
+```
+
+TOKYO, JAPON, 05/06/2013
+
+Dans le domaine culturel, MM. Hollande et Abe ont établi une «Déclaration culturelle conjointe» revisitant l’accord culturel bilatéral datant de 1953 en le complétant notamment avec les coopérations qui n’existaient pas alors (dans le domaine du numérique, de la coopération décentralisée, des partenariats entre grands opérateurs culturels, par exemple). Cette déclaration reconnaît à l’Institut français du Japon une place centrale dans le dispositif de politique culturelle publique de la France au Japon.
+
+[Déclaration conjointe relative à la culture ](http://www.institutfrancais.jp/wp-content/uploads/2013/06/130606-d%C3%A9cla-culture-FR1.pdf)
+
+#Sommet de l’ASEM
+```
+-center: [45.4667971, 9.1904984]
+-zoom: 7
+L.marker([45.4667971, 9.1904984]).actions.addRemove(S.map)
+```
+
+MILAN, ITALIE, 16/10/2014
+
+10eme Sommet de l’ASEM. Le dialogue Europe-Asie dit « ASEM » (Asia Europe Meeting) a été lancé à Bangkok en 1996, à la suite d’une initiative franco-singapourienne. L’idée a d’abord été proposée aux autorités françaises par le Premier ministre de Singapour, en visite à Paris en 1994. Il s’agissait de développer les relations entre l’Europe et l’Asie qui étaient alors à un niveau jugé inférieur à celui des relations entre les Etats-Unis et l’Asie, qui venaient de fonder l’Asia Pacific economic cooperation forum (APEC). M. François-Xavier ORTOLI a été chargé de convaincre les autres pays membres de l’Union européenne de s’associer à ce projet
+
+[Dialogue Europe - Asie (ASEM)](http://www.diplomatie.gouv.fr/fr/dossiers-pays/asie/relations-entre-l-europe-et-l-asie/article/dialogue-europe-asie-asem)
+
+#Visite officielle du Président de la République
+```
+-center: [-22.2745263, 166.442419]
+-zoom: 7
+L.marker([-22.2745263, 166.442419]).actions.addRemove(S.map)
+```
+
+NOUMÉA, NOUVELLE CALÉDONIE, 17/11/2014
+
+#Visite d'état du Président de la République
+```
+-center: [-33.8679573, 151.210047]
+-zoom: 7
+L.marker([-33.8679573, 151.210047]).actions.addRemove(S.map)
+```
+
+SYDNEY, AUSTRALIE, 18/11/2014
+
+Le chef de l’Etat effectue les 18 et 19 novembre 2014 une visite d’Etat en Australie à l’invitation du gouvernement australien, au cours de laquelle il rencontre le Premier ministre, Tony ABBOTT. François Hollande se rende à Sydney puis à Canberra. Il s’agit de la première visite d’Etat en Australie d’un Président français.
+
+[Communiqué de presse : Visite d’Etat en Australie ](http://www.ambafrance-au.org/Communique-de-presse-Visite-d-Etat)
+
+#Visite d'état du Président de la République
+```
+-center: [-35.2975905, 149.1012676]
+-zoom: 7
+L.marker([-35.2975905, 149.1012676]).actions.addRemove(S.map)
+```
+
+CANBERRA, AUSTRALIE, 19/11/2014
+
+[Visite du président de la République au Lycée franco-australien de Canberra](http://www.aefe.fr/vie-du-reseau/toute-lactualite/visite-du-president-de-la-republique-au-lycee-franco-australien-de-canberra)
+
+#Déplacement avec le Président de la République sur la crise en Ukraine
+```
+-center: [55.7506828, 37.6174976]
+-zoom: 7
+L.marker([55.7506828, 37.6174976]).actions.addRemove(S.map)
+```
+
+MOSCOU, RUSSIE, 06/02/2015
+
+NOTA : Ce jour-là, le site de l’Elysée ne met à disposition aucune archive en ligne sur ce déplacement. Par contre le 8 février il y a eu un entretien téléphonique entre M. le Président, Mme Merkel, M. Porochenko et M. Poutine.
+
+#Sommet de Minsk
+```
+-center: [53.902334, 27.5618791]
+-zoom: 7
+L.marker([53.902334, 27.5618791]).actions.addRemove(S.map)
+```
+
+MINSK, BIELORUSSIE, 11/02/2015
+
+Le président François Hollande et la chancelière Angela Merkel se sont exprimés au sujet de l'accord de cessez-le-feu en Ukraine.
+
+[Vidéo de la déclaration conjointe](http://www.dailymotion.com/embed/video/x2h0jx0?hideInfos=1&related=0&wmode=opaque&info=0)
+
+</script></body></html>

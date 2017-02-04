@@ -1,0 +1,19 @@
+/* TEAM */
+	Software architect:Nicolas VIAUD
+	From:Nantes, France
+
+	UI developer: Jamel ABASSOU
+	From:Nantes, France
+
+	WGIS expert: Thomas GRATIER
+	From:Nantes, France
+
+/* THANKS */
+
+	Quai d'Orsay Numerique
+
+/* SITE */
+	Last update:2017/01/26
+	Language: French
+	Doctype:HTML5
+	IDE: Sublime Text, OpenLayer 3

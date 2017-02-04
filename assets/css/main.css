@@ -1,0 +1,148 @@
+body {
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+html, body, #map {
+  height: 100%;
+  font: 12pt "Fira Sans", "Helvetica Neue", Arial, Helvetica, sans-serif
+}
+
+h2 {
+  font-size: 1.3em;
+  margin-top: 0.23em;
+  margin-bottom: 0.23em;
+}
+
+.lorem {
+  font-style: italic;
+  color: #AAA;
+}
+
+.tooltip {
+  position: relative;
+  padding: 3px;
+  background: rgb(0, 0, 0);
+  color: white;
+  opacity: 0.8;
+  white-space: nowrap;
+  font: 10pt sans-serif;
+}
+
+
+/* Styles du controle "Indication de contexte/année" */
+.context-per-year {
+  top: 15px;
+  right: .5em;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.4);
+  color: white;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.context-per-year > div {
+  padding: 10px;
+  border-radius: 4px;
+  background-color: rgba(0, 60, 136, 0.8);
+}
+
+.ol-touch .context-per-year {
+  top: 15px;
+}
+
+.context-per-year.ol-control:hover {
+  background-color: rgba(0, 60, 136, 0.5);
+}
+
+/*  Styles du controle "time slider" */
+.time-slider {
+  left: 50%;
+  min-height: 1em;
+  min-width: 1em;
+  position: absolute;
+  bottom: 1.5em;
+  transform: translate(-50%,0);
+  -webkit-transform: translate(-50%,0);
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+}
+
+.time-slider.ol-control:hover{
+  background-color: white;
+}
+
+.time-slider > div {
+  background-color: rgba(0, 60, 136, 0.8);
+  padding: 20px 20px 30px 30px;
+  border-radius: 4px;
+}
+
+.time-slider > div > div {
+  background-color: white;
+}
+
+/* Style spécifique SVG, fill est une propriété SVG et pas du DOM */
+.time-slider > div > div > svg text {
+  fill: white;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.d3-slider-handle {
+  border: 1px solid #973BD7;
+  background: #973BD7;
+}
+
+.d3-slider-handle:hover {
+
+}
+
+.ol-touch .time-slider {
+  top: 80px;
+}
+
+.sidebar-pane {
+  padding: 10px 10px;
+}
+
+.vg-tooltip {
+  z-index: 2001;
+}
+
+.vg-tooltip td.key {
+  max-width: 200px;
+}
+
+.vg-tooltip td.value {
+  max-width: 250px;
+}
+
+.sidebar-tabs {
+  background-color: rgba(0, 60, 136, 0.8);
+}
+
+.vanilla-modal .modal {
+    font-size: 20px;
+  }
+
+.titlePopup {
+  margin: 0 auto;
+  text-align: center;
+  float: none;
+}
+
+/*line-separator*/
+
+hr {
+    border: 0;
+    width: 80%;
+    height: 1px;
+    color: #5a5a5a;
+    background-color: #5a5a5a;
+}
+
+#vis {
+  text-align: center;
+}

@@ -1,0 +1,456 @@
+<!doctype><html><head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Odyssey.js Slides</title>
+  <meta name="description" content="" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="icon" type="image/x-icon" href="images/favicon.png" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+
+  <link rel="stylesheet" href="vendor/cartodb/v3/themes/css/cartodb.css" />
+  <link rel="stylesheet" href="vendor/odyssey/sandbox/css/slides.css" />
+
+  <link rel="stylesheet" href="css/custom.css" />
+
+  <script src="vendor/modernizr-2.6.2.min.js"></script>
+</head>
+<body>
+  <div id="map" style="width: 100%; height: 100%;"></div>
+
+  <div id="slides_container" style="display:block;">
+    <div id="dots"></div>
+
+    <div id="slides"></div>
+
+    <ul id="navButtons">
+      <li><a class="prev"></a></li>
+      <li><a class="next"></a></li>
+    </ul>
+  </div>
+
+  <div id="credits">
+    <span class="title" id="title">Hackathon 2017</span>
+    <span class="author"><strong id="author">By Name using</strong> <a href="http://cartodb.github.io/odyssey.js/">Odyssey.js</a><span>
+  </span></span></div>
+
+  <script src="vendor/cartodb/v3/cartodb.js"></script>
+  <script src="vendor/odyssey/odyssey.js" charset="UTF-8"></script>
+
+  <script>
+    var resizePID;
+
+    function clearResize() {
+      clearTimeout(resizePID);
+      resizePID = setTimeout(function() { adjustSlides(); }, 100);
+    }
+
+    if (!window.addEventListener) {
+      window.attachEvent("resize", function load(event) {
+        clearResize();
+      });
+    } else {
+      window.addEventListener("resize", function load(event) {
+        clearResize();
+      });
+    }
+
+    function adjustSlides() {
+      var container = document.getElementById("slides_container"),
+          slide = document.querySelectorAll('.selected_slide')[0];
+
+      if (slide) {
+        if (slide.offsetHeight+169+40+80 >= window.innerHeight) {
+          container.style.bottom = "80px";
+
+          var h = container.offsetHeight;
+
+          slide.style.height = h-169+"px";
+          slide.classList.add("scrolled");
+        } else {
+          container.style.bottom = "auto";
+          container.style.minHeight = "0";
+
+          slide.style.height = "auto";
+          slide.classList.remove("scrolled");
+        }
+      }
+    }
+
+    var resizeAction = O.Action(function() {
+      function imageLoaded() {
+        counter--;
+
+        if (counter === 0) {
+          adjustSlides();
+        }
+      }
+      var images = $('img');
+      var counter = images.length;
+
+      images.each(function() {
+        if (this.complete) {
+          imageLoaded.call( this );
+        } else {
+          $(this).one('load', imageLoaded);
+        }
+      });
+    });
+
+    function click(el) {
+      var element = O.Core.getElement(el);
+      var t = O.Trigger();
+
+      // TODO: clean properly
+      function click() {
+        t.trigger();
+      }
+
+      if (element) element.onclick = click;
+
+      return t;
+    }
+
+    O.Template({
+      init: function() {
+        var seq = O.Triggers.Sequential();
+
+        var baseurl = this.baseurl = 'http://{a-c}.tile.opentopomap.org/{z}/{x}/{y}.png';
+//        var baseurl = this.baseurl = 'http://localhost:8081/{z}/{x}/{y}.png';
+        var map = this.map = L.map('map').setView([0, 0.0], 4);
+        var basemap = this.basemap = L.tileLayer(baseurl, {
+          attribution: 'data OSM - map CartoDB'
+        }).addTo(map);
+
+        // enanle keys to move
+        O.Keys().on('map').left().then(seq.prev, seq)
+        O.Keys().on('map').right().then(seq.next, seq)
+
+        click(document.querySelectorAll('.next')).then(seq.next, seq)
+        click(document.querySelectorAll('.prev')).then(seq.prev, seq)
+
+        var slides = O.Actions.Slides('slides');
+        var story = O.Story()
+
+        this.story = story;
+        this.seq = seq;
+        this.slides = slides;
+        this.progress = O.UI.DotProgress('dots').count(0);
+      },
+
+      update: function(actions) {
+        var self = this;
+
+        if (!actions.length) return;
+
+        this.story.clear();
+
+        if (this.baseurl && (this.baseurl !== actions.global.baseurl)) {
+          this.baseurl = actions.global.baseurl || 'http://localhost:8081/{z}/{x}/{y}.png';
+
+          this.basemap.setUrl(this.baseurl);
+        }
+
+        if (this.cartoDBLayer && ("http://"+self.cartoDBLayer.options.user_name+".cartodb.com/api/v2/viz/"+self.cartoDBLayer.options.layer_definition.stat_tag+"/viz.json" !== actions.global.vizjson)) {
+          this.map.removeLayer(this.cartoDBLayer);
+
+          this.cartoDBLayer = null;
+          this.created = false;
+        }
+
+        if (actions.global.vizjson && !this.cartoDBLayer) {
+          if (!this.created) { // sendCode debounce < vis loader
+            cdb.vis.Loader.get(actions.global.vizjson, function(vizjson) {
+              self.map.fitBounds(vizjson.bounds);
+
+              cartodb.createLayer(self.map, vizjson)
+                .done(function(layer) {
+                  self.cartoDBLayer = layer;
+
+                  var sublayer = layer.getSubLayer(0),
+                      layer_name = layer.layers[0].options.layer_name,
+                      filter = actions.global.cartodb_filter ? " WHERE "+actions.global.cartodb_filter : "";
+
+                  sublayer.setSQL("SELECT * FROM "+layer_name+filter)
+
+                  self.map.addLayer(layer);
+
+                  self._resetActions(actions);
+                }).on('error', function(err) {
+                  console.log("some error occurred: " + err);
+                });
+            });
+
+            this.created = true;
+          }
+
+          return;
+        }
+
+        this._resetActions(actions);
+      },
+
+      _resetActions: function(actions) {
+        // update footer title and author
+        var title_ = actions.global.title === undefined ? '' : actions.global.title,
+            author_ = actions.global.author === undefined ? 'Using' : 'By '+actions.global.author+' using';
+
+        document.getElementById('title').innerHTML = title_;
+        document.getElementById('author').innerHTML = author_;
+        document.title = title_ + " | " + author_ +' Odyssey.js';
+
+        var sl = actions;
+
+        document.getElementById('slides').innerHTML = ''
+        this.progress.count(sl.length);
+
+        // create new story
+        for(var i = 0; i < sl.length; ++i) {
+          var slide = sl[i];
+          var tmpl = "<div class='slide' style='diplay:none'>";
+
+          tmpl += slide.html();
+          tmpl += "</div>";
+          document.getElementById('slides').innerHTML += tmpl;
+
+          this.progress.step(i).then(this.seq.step(i), this.seq)
+
+          var actions = O.Parallel(
+            this.slides.activate(i),
+            slide(this),
+            this.progress.activate(i),
+            resizeAction
+          );
+
+          actions.on("finish.app", function() {
+            adjustSlides();
+          });
+
+          this.story.addState(
+            this.seq.step(i),
+            actions
+          )
+        }
+
+        this.story.go(this.seq.current());
+      },
+
+      changeSlide: function(n) {
+        this.seq.current(n);
+      }
+    });
+  </script>
+
+<!--
+  -baseurl: "http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+  -->
+
+<script id="md_template" type="text/template">
+```
+-baseurl: "http://localhost:8081/{z}/{x}/{y}.png"
+-title: "Déplacements du Président de la République accompagné du Ministre des Affaires étrangères de 2012 à 2015"
+-author: "MAEDI - Hackarto2017"
+```
+
+#Quai d'Orsay Numérique
+```
+- center: [47.2186371, -1.5541361]
+- zoom: 6
+L.marker([48.8566101,2.3514992]).actions.addRemove(S.map)
+```
+
+![Logo Quai d'Orsay numérique](images/logo_soiree_quai_orsay_numerique.png)
+
+Projet réalisé à l'occasion du Hackathon organisé par le Ministère des Affaires étrangères et du Développement Internationnal.
+
+## Origine des Données
+
+Données obtenues à partir du site data.gouv.fr.
+
+[Déplacements du ministre des Affaires étrangères du 18 mai 2012 au 12 février 2015](http://www.data.gouv.fr/fr/datasets/deplacements-du-ministre-des-affaires-etrangeres-du-18-mai-2012-au-12-fevrier-2015/)
+
+#Afrique - Ocean indien
+```
+- center: [0.0, 0.0]
+- zoom: 3
+```
+
+* 12/10/2012 - Rencontres bilatérales, DAKAR, SENEGAL
+
+```
+L.marker([14.693425, -17.4479379]).actions.addRemove(S.map)
+```
+
+* 13/10/2012 - Sommet de la Francophonie, KINSHASA, RDC
+
+```
+L.marker([-4.3217054, 15.3125974]).actions.addRemove(S.map)
+```
+
+* 02/02/2013 - Rencontre avec les armées française et malienne, MOPTI, MALI
+
+```
+L.marker([14.4879631, -4.1905985]).actions.addRemove(S.map)
+```
+
+* 02/02/2013 - Rencontre avec les armées française et malienne, TOMBOUCTOU, MALI
+
+```
+L.marker([16.7719091, -3.0087271]).actions.addRemove(S.map)
+```
+
+* 02/02/2013 - Rencontre avec les armées française et malienne, BAMAKO, MALI
+
+```
+L.marker([12.649319, -8.0003369]).actions.addRemove(S.map)
+```
+
+* 15/05/2013 - Conférence des Donateurs pour le Développement du Mali, BRUXELLES, BELGIQUE
+
+```
+L.marker([50.8465565, 4.351697]).actions.addRemove(S.map)
+```
+
+* 15/10/2013 - Visite officielle du Président de la République, JOHANNESBURG, AFRIQUE DU SUD
+
+```
+L.marker([-26.2049999, 28.049722]).actions.addRemove(S.map)
+```
+
+* 27/02/2014 - Visite officielle du Président de la République, ABUJA, NIGERIA
+
+```
+L.marker([9.0643305, 7.4892974]).actions.addRemove(S.map)
+```
+
+* 28/02/2014 - Visite officielle du Président de la République, BANGUI, RÉPUBLIQUE DE CENTRAFRIQUE
+
+```
+L.marker([4.3612200, 18.5549600]).actions.addRemove(S.map)
+```
+
+* 12/09/2014 - Visite de travail du Président de la République, BAGDAD, IRAK
+
+```
+L.marker([33.3024248, 44.3787992]).actions.addRemove(S.map)
+```
+
+* 12/09/2014 - Visite de travail du Président de la République, ERBIL, IRAK
+
+```
+L.marker([36.5349312, 44.2534471]).actions.addRemove(S.map)
+```
+#Rencontres bilatérales
+```
+-center: [14.693425, -17.4479379]
+-zoom: 7
+L.marker([14.693425, -17.4479379]).actions.addRemove(S.map)
+```
+
+DAKAR, SENEGAL, 12/10/2012
+
+Le Président de la République, François HOLLANDE, se rendra à Dakar en République du Sénégal, le vendredi 12 octobre 2012. Puis, le samedi 13 octobre 2012, il se rendra à Kinshasa, en République démocratique du Congo dans le cadre du XIVème sommet de la Francophonie.
+
+[Déplacement en Afrique](http://www.elysee.fr/communiques-de-presse/article/deplacement-en-afrique/)
+
+#Sommet de la Francophonie
+```
+-center: [-4.3217054, 15.3125974]
+-zoom: 7
+L.marker([-4.3217054, 15.3125974]).actions.addRemove(S.map)
+```
+
+KINSHASA, RDC, 13/10/2012
+
+#Rencontre avec les armées française et malienne
+```
+-center: [14.4879631, -4.1905985]
+-zoom: 7
+L.marker([14.4879631, -4.1905985]).actions.addRemove(S.map)
+```
+
+MOPTI, MALI, 02/02/2013
+
+Le président de la République s'est rendu au Mali, où il a rencontré les soldats agissant dans le cadre de l'opération Serval et réaffirmé le soutien de la France au peuple malien.
+
+[Déplacement au Mali – Reportage vidéo](http://www.dailymotion.com/embed/video/xxbqq1?hideInfos=1&related=0&wmode=opaque&info=0)
+
+#Rencontre avec les armées française et malienne
+```
+-center: [16.7719091, -3.0087271]
+-zoom: 7
+L.marker([16.7719091, -3.0087271]).actions.addRemove(S.map)
+```
+
+TOMBOUCTOU, MALI, 02/02/2013
+
+#Rencontre avec les armées française et malienne
+```
+-center: [12.649319, -8.0003369]
+-zoom: 7
+L.marker([12.649319, -8.0003369]).actions.addRemove(S.map)
+```
+
+BAMAKO, MALI, 02/02/2013
+
+[Discours de M. Dioncounda Traoré, Président de la République du Mali, et du Président de la République française](http://www.elysee.fr/declarations/article/discours-de-m-dioncounda-traore-president-de-la-republique-du-mali-et-du-president-de-la-republique-francaise/)
+
+#Conférence des Donateurs pour le Développement du Mali
+```
+-center: [50.8465565, 4.351697]
+-zoom: 7
+L.marker([50.8465565, 4.351697]).actions.addRemove(S.map)
+```
+
+BRUXELLES, BELGIQUE, 15/05/2013
+
+Une conférence internationale de haut niveau pour le soutien et le développement du Mali, co-présidée par l’Union européenne et la France, a été organisée à Bruxelles le 15 mai 2013.
+
+[http://donor-conference-mali.eu/fr](http://donor-conference-mali.eu/fr)
+
+#Visite officielle du Président de la République
+```
+-center: [-26.2049999, 28.049722]
+-zoom: 7
+L.marker([-26.2049999, 28.049722]).actions.addRemove(S.map)
+```
+
+JOHANNESBURG, AFRIQUE DU SUD, 15/10/2013
+
+#Visite officielle du Président de la République
+```
+-center: [9.0643305, 7.4892974]
+-zoom: 7
+L.marker([9.0643305, 7.4892974]).actions.addRemove(S.map)
+```
+
+ABUJA, NIGERIA, 27/02/2014
+
+#Visite officielle du Président de la République
+```
+-center: [4.3612200, 18.5549600]
+-zoom: 7
+L.marker([4.3612200, 18.5549600]).actions.addRemove(S.map)
+```
+
+BANGUI, RÉPUBLIQUE DE CENTRAFRIQUE, 28/02/2014
+
+#Visite de travail du Président de la République
+```
+-center: [33.3024248, 44.3787992]
+-zoom: 7
+L.marker([33.3024248, 44.3787992]).actions.addRemove(S.map)
+```
+
+BAGDAD, IRAK, 12/09/2014
+
+#Visite de travail du Président de la République
+```
+-center: [36.5349312, 44.2534471]
+-zoom: 7
+L.marker([36.5349312, 44.2534471]).actions.addRemove(S.map)
+```
+
+ERBIL, IRAK, 12/09/2014
+
+</script></body></html>

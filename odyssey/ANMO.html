@@ -1,0 +1,546 @@
+<!doctype><html><head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Odyssey.js Slides</title>
+  <meta name="description" content="" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="icon" type="image/x-icon" href="images/favicon.png" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+
+  <link rel="stylesheet" href="vendor/cartodb/v3/themes/css/cartodb.css" />
+  <link rel="stylesheet" href="vendor/odyssey/sandbox/css/slides.css" />
+
+  <link rel="stylesheet" href="css/custom.css" />
+
+  <script src="vendor/modernizr-2.6.2.min.js"></script>
+</head>
+<body>
+  <div id="map" style="width: 100%; height: 100%;"></div>
+
+  <div id="slides_container" style="display:block;">
+    <div id="dots"></div>
+
+    <div id="slides"></div>
+
+    <ul id="navButtons">
+      <li><a class="prev"></a></li>
+      <li><a class="next"></a></li>
+    </ul>
+  </div>
+
+  <div id="credits">
+    <span class="title" id="title">Hackathon 2017</span>
+    <span class="author"><strong id="author">By Name using</strong> <a href="http://cartodb.github.io/odyssey.js/">Odyssey.js</a><span>
+  </span></span></div>
+
+  <script src="vendor/cartodb/v3/cartodb.js"></script>
+  <script src="vendor/odyssey/odyssey.js" charset="UTF-8"></script>
+
+  <script>
+    var resizePID;
+
+    function clearResize() {
+      clearTimeout(resizePID);
+      resizePID = setTimeout(function() { adjustSlides(); }, 100);
+    }
+
+    if (!window.addEventListener) {
+      window.attachEvent("resize", function load(event) {
+        clearResize();
+      });
+    } else {
+      window.addEventListener("resize", function load(event) {
+        clearResize();
+      });
+    }
+
+    function adjustSlides() {
+      var container = document.getElementById("slides_container"),
+          slide = document.querySelectorAll('.selected_slide')[0];
+
+      if (slide) {
+        if (slide.offsetHeight+169+40+80 >= window.innerHeight) {
+          container.style.bottom = "80px";
+
+          var h = container.offsetHeight;
+
+          slide.style.height = h-169+"px";
+          slide.classList.add("scrolled");
+        } else {
+          container.style.bottom = "auto";
+          container.style.minHeight = "0";
+
+          slide.style.height = "auto";
+          slide.classList.remove("scrolled");
+        }
+      }
+    }
+
+    var resizeAction = O.Action(function() {
+      function imageLoaded() {
+        counter--;
+
+        if (counter === 0) {
+          adjustSlides();
+        }
+      }
+      var images = $('img');
+      var counter = images.length;
+
+      images.each(function() {
+        if (this.complete) {
+          imageLoaded.call( this );
+        } else {
+          $(this).one('load', imageLoaded);
+        }
+      });
+    });
+
+    function click(el) {
+      var element = O.Core.getElement(el);
+      var t = O.Trigger();
+
+      // TODO: clean properly
+      function click() {
+        t.trigger();
+      }
+
+      if (element) element.onclick = click;
+
+      return t;
+    }
+
+    O.Template({
+      init: function() {
+        var seq = O.Triggers.Sequential();
+
+        var baseurl = this.baseurl = 'http://{a-c}.tile.opentopomap.org/{z}/{x}/{y}.png';
+//        var baseurl = this.baseurl = 'http://localhost:8081/{z}/{x}/{y}.png';
+        var map = this.map = L.map('map').setView([0, 0.0], 4);
+        var basemap = this.basemap = L.tileLayer(baseurl, {
+          attribution: 'data OSM - map CartoDB'
+        }).addTo(map);
+
+        // enanle keys to move
+        O.Keys().on('map').left().then(seq.prev, seq)
+        O.Keys().on('map').right().then(seq.next, seq)
+
+        click(document.querySelectorAll('.next')).then(seq.next, seq)
+        click(document.querySelectorAll('.prev')).then(seq.prev, seq)
+
+        var slides = O.Actions.Slides('slides');
+        var story = O.Story()
+
+        this.story = story;
+        this.seq = seq;
+        this.slides = slides;
+        this.progress = O.UI.DotProgress('dots').count(0);
+      },
+
+      update: function(actions) {
+        var self = this;
+
+        if (!actions.length) return;
+
+        this.story.clear();
+
+        if (this.baseurl && (this.baseurl !== actions.global.baseurl)) {
+          this.baseurl = actions.global.baseurl || 'http://localhost:8081/{z}/{x}/{y}.png';
+
+          this.basemap.setUrl(this.baseurl);
+        }
+
+        if (this.cartoDBLayer && ("http://"+self.cartoDBLayer.options.user_name+".cartodb.com/api/v2/viz/"+self.cartoDBLayer.options.layer_definition.stat_tag+"/viz.json" !== actions.global.vizjson)) {
+          this.map.removeLayer(this.cartoDBLayer);
+
+          this.cartoDBLayer = null;
+          this.created = false;
+        }
+
+        if (actions.global.vizjson && !this.cartoDBLayer) {
+          if (!this.created) { // sendCode debounce < vis loader
+            cdb.vis.Loader.get(actions.global.vizjson, function(vizjson) {
+              self.map.fitBounds(vizjson.bounds);
+
+              cartodb.createLayer(self.map, vizjson)
+                .done(function(layer) {
+                  self.cartoDBLayer = layer;
+
+                  var sublayer = layer.getSubLayer(0),
+                      layer_name = layer.layers[0].options.layer_name,
+                      filter = actions.global.cartodb_filter ? " WHERE "+actions.global.cartodb_filter : "";
+
+                  sublayer.setSQL("SELECT * FROM "+layer_name+filter)
+
+                  self.map.addLayer(layer);
+
+                  self._resetActions(actions);
+                }).on('error', function(err) {
+                  console.log("some error occurred: " + err);
+                });
+            });
+
+            this.created = true;
+          }
+
+          return;
+        }
+
+        this._resetActions(actions);
+      },
+
+      _resetActions: function(actions) {
+        // update footer title and author
+        var title_ = actions.global.title === undefined ? '' : actions.global.title,
+            author_ = actions.global.author === undefined ? 'Using' : 'By '+actions.global.author+' using';
+
+        document.getElementById('title').innerHTML = title_;
+        document.getElementById('author').innerHTML = author_;
+        document.title = title_ + " | " + author_ +' Odyssey.js';
+
+        var sl = actions;
+
+        document.getElementById('slides').innerHTML = ''
+        this.progress.count(sl.length);
+
+        // create new story
+        for(var i = 0; i < sl.length; ++i) {
+          var slide = sl[i];
+          var tmpl = "<div class='slide' style='diplay:none'>";
+
+          tmpl += slide.html();
+          tmpl += "</div>";
+          document.getElementById('slides').innerHTML += tmpl;
+
+          this.progress.step(i).then(this.seq.step(i), this.seq)
+
+          var actions = O.Parallel(
+            this.slides.activate(i),
+            slide(this),
+            this.progress.activate(i),
+            resizeAction
+          );
+
+          actions.on("finish.app", function() {
+            adjustSlides();
+          });
+
+          this.story.addState(
+            this.seq.step(i),
+            actions
+          )
+        }
+
+        this.story.go(this.seq.current());
+      },
+
+      changeSlide: function(n) {
+        this.seq.current(n);
+      }
+    });
+  </script>
+
+<!--
+  -baseurl: "http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+  -->
+
+<script id="md_template" type="text/template">
+```
+-baseurl: "http://localhost:8081/{z}/{x}/{y}.png"
+-title: "Déplacements du Président de la République accompagné du Ministre des Affaires étrangères de 2012 à 2015"
+-author: "MAEDI - Hackarto2017"
+```
+
+#Quai d'Orsay Numérique
+```
+- center: [47.2186371, -1.5541361]
+- zoom: 6
+L.marker([48.8566101,2.3514992]).actions.addRemove(S.map)
+```
+
+![Logo Quai d'Orsay numérique](images/logo_soiree_quai_orsay_numerique.png)
+
+Projet réalisé à l'occasion du Hackathon organisé par le Ministère des Affaires étrangères et du Développement Internationnal.
+
+## Origine des Données
+
+Données obtenues à partir du site data.gouv.fr.
+
+[Déplacements du ministre des Affaires étrangères du 18 mai 2012 au 12 février 2015](http://www.data.gouv.fr/fr/datasets/deplacements-du-ministre-des-affaires-etrangeres-du-18-mai-2012-au-12-fevrier-2015/)
+
+#Afrique du nord – Moyen-orient
+```
+- center: [0.0, 0.0]
+- zoom: 3
+```
+
+* 04/11/2012 - Rencontres bilatérales, BEYROUTH, LIBAN
+
+```
+L.marker([33.8959203, 35.47843]).actions.addRemove(S.map)
+```
+
+* 04/11/2012 - Rencontres bilatérales, DJEDDAH, ARABIE SAOUDITE
+
+```
+L.marker([21.5822247, 39.1640396]).actions.addRemove(S.map)
+```
+
+* 19/12/2012 - Rencontres bilatérales, ALGER, ALGERIE
+
+```
+L.marker([36.775348, 3.060065]).actions.addRemove(S.map)
+```
+
+* 20/12/2012 - Rencontres bilatérales, TLEMCEN, ALGERIE
+
+```
+L.marker([34.881789, -1.3166989]).actions.addRemove(S.map)
+```
+
+* 15/01/2013 - Visite bilatérale du Président de la République, ABOU DABI, EMIRATS ARABES UNIS
+
+```
+L.marker([24.4747961, 54.3705762]).actions.addRemove(S.map)
+```
+
+* 15/01/2013 - Visite bilatérale du Président de la République, DUBAI, EMIRATS ARABES UNIS
+
+```
+L.marker([25.2683521, 55.2961962]).actions.addRemove(S.map)
+```
+
+* 03/04/2013 - Visite de travail du Président de la République, CASABLANCA, MAROC
+
+```
+L.marker([33.5949733, -7.6188008]).actions.addRemove(S.map)
+```
+
+* 04/04/2013 - Visite de travail du Président de la République, RABAT, MAROC
+
+```
+L.marker([34.0224046, -6.8345426]).actions.addRemove(S.map)
+```
+
+* 22/06/2013 - Visite officielle du Président de la République, DOHA, QATAR
+
+```
+L.marker([25.3014957, 51.4996673988]).actions.addRemove(S.map)
+```
+
+* 23/06/2013 - Visite officielle du Président de la République, AMMAN, JORDANIE
+
+```
+L.marker([31.9515694, 35.9239625]).actions.addRemove(S.map)
+```
+
+* 04/07/2013 - Visite officielle du Président de la République, TUNIS, TUNISIE
+
+```
+L.marker([33.8439408, 9.400138]).actions.addRemove(S.map)
+```
+
+* 19/09/2013 - Investiture du nouveau Président Malien, BAMAKO, MALI
+
+```
+L.marker([12.649319, -8.0003369]).actions.addRemove(S.map)
+```
+
+* 17/11/2013 - Visite officielle du Président de la République, TEL AVIV, ISRAEL
+
+```
+L.marker([32.0804808, 34.7805274]).actions.addRemove(S.map)
+```
+
+* 18/11/2013 - Visite officielle du Président de la République, TEL AVIV, ISRAEL
+
+```
+L.marker([32.0804808, 34.7805274]).actions.addRemove(S.map)
+```
+
+* 18/11/2013 - Visite officielle du Président de la République, RAMALLAH, TERRITOIRES PALESTINIENS
+
+```
+L.marker([31.9030821, 35.1951741]).actions.addRemove(S.map)
+```
+
+* 29/12/2013 - Visite officielle du Président de la République, RIYAD, ARABIE SAOUDITE
+
+```
+L.marker([24.6319692, 46.7150648]).actions.addRemove(S.map)
+```
+
+* 17/07/2014 - Visite officielle du Président de la République, ABIDJAN, COTE D'IVOIRE
+
+```
+L.marker([5.4091179, -4.0422098]).actions.addRemove(S.map)
+```
+#Rencontres bilatérales
+```
+-center: [33.8959203, 35.47843]
+-zoom: 7
+L.marker([33.8959203, 35.47843]).actions.addRemove(S.map)
+```
+
+BEYROUTH, LIBAN, 04/11/2012
+
+Rencontre du président de la République, M. François Hollande, et du président de la République libanaise, M. Michel Sleimane – Beyrouth, 4 novembre 2012.
+
+[Bulletin d'actualités du 05 novembre 2012](http://basedoc.diplomatie.gouv.fr/vues/Kiosque/FranceDiplomatie/kiosque.php?fichier=bafr2012-11-05.html)
+
+#Rencontres bilatérales
+```
+-center: [21.5822247, 39.1640396]
+-zoom: 7
+L.marker([21.5822247, 39.1640396]).actions.addRemove(S.map)
+```
+
+DJEDDAH, ARABIE SAOUDITE, 04/11/2012
+
+#Rencontres bilatérales
+```
+-center: [36.775348, 3.060065]
+-zoom: 7
+L.marker([36.775348, 3.060065]).actions.addRemove(S.map)
+```
+
+ALGER, ALGERIE, 19/12/2012
+
+Mission "Coopération industrielle et technologique franco-algérienne"
+
+[Déclaration d’Alger sur l’amitié et la coopération entre la France et l’Algérie](http://www.diplomatie.gouv.fr/fr/IMG/pdf/declaration2012-signee_cle0e89c7.pdf)
+
+#Rencontres bilatérales
+```
+-center: [34.881789, -1.3166989]
+-zoom: 7
+L.marker([34.881789, -1.3166989]).actions.addRemove(S.map)
+```
+
+TLEMCEN, ALGERIE, 20/12/2012
+
+#Visite bilatérale du Président de la République
+```
+-center: [24.4747961, 54.3705762]
+-zoom: 7
+L.marker([24.4747961, 54.3705762]).actions.addRemove(S.map)
+```
+
+ABOU DABI, EMIRATS ARABES UNIS, 15/01/2013
+
+Visite de la base navale « Camp de la paix » et rencontre avec les forces françaises aux Emirats Arabes Unis. Visite du pavillon français du World Future Energy Summit. Allocution du Président de la République en séance inaugurale du World Future Energy Summit. Entretien avec Cheikh Khalifa bin Zayed Al Nahyan, Président de la fédération des Emirats Arabes Unis, Emir d’Abou Dabi, et déjeuner officiel. Entretien avec Cheikh Mohamed bin Zayed Al Nahyan, Prince héritier et Vice commandant suprême des forces armées. Clôture du dialogue stratégique d’affaires franco-émirien, en présence du Prince héritier.
+
+[Visite officielle du Président de la République aux Emirats Arabes Unis](http://www.ambafrance-eau.org/Visite-officielle-du-President-de,1678)
+
+#Visite bilatérale du Président de la République
+```
+-center: [25.2683521, 55.2961962]
+-zoom: 7
+L.marker([25.2683521, 55.2961962]).actions.addRemove(S.map)
+```
+
+DUBAI, EMIRATS ARABES UNIS, 15/01/2013
+
+Entretien avec Mohamed Bin Rached Al Maktoum, vice-président, Premier ministre de la fédération des Emirats Arabes Unis, Emir de Dubaï. Conférence de presse du Président de la République. Allocution du Président de la République devant la communauté française.
+
+#Visite de travail du Président de la République
+```
+-center: [33.5949733, -7.6188008]
+-zoom: 7
+L.marker([33.5949733, -7.6188008]).actions.addRemove(S.map)
+```
+
+CASABLANCA, MAROC, 03/04/2013
+
+#Visite de travail du Président de la République
+```
+-center: [34.0224046, -6.8345426]
+-zoom: 7
+L.marker([34.0224046, -6.8345426]).actions.addRemove(S.map)
+```
+
+RABAT, MAROC, 04/04/2013
+
+#Visite officielle du Président de la République
+```
+-center: [25.3014957, 51.4996673988]
+-zoom: 7
+L.marker([25.3014957, 51.4996673988]).actions.addRemove(S.map)
+```
+
+DOHA, QATAR, 22/06/2013
+
+#Visite officielle du Président de la République
+```
+-center: [31.9515694, 35.9239625]
+-zoom: 7
+L.marker([31.9515694, 35.9239625]).actions.addRemove(S.map)
+```
+
+AMMAN, JORDANIE, 23/06/2013
+
+#Visite officielle du Président de la République
+```
+-center: [33.8439408, 9.400138]
+-zoom: 7
+L.marker([33.8439408, 9.400138]).actions.addRemove(S.map)
+```
+
+TUNIS, TUNISIE, 04/07/2013
+
+#Investiture du nouveau Président Malien
+```
+-center: [12.649319, -8.0003369]
+-zoom: 7
+L.marker([12.649319, -8.0003369]).actions.addRemove(S.map)
+```
+
+BAMAKO, MALI, 19/09/2013
+
+#Visite officielle du Président de la République
+```
+-center: [32.0804808, 34.7805274]
+-zoom: 7
+L.marker([32.0804808, 34.7805274]).actions.addRemove(S.map)
+```
+
+TEL AVIV, ISRAEL, 17/11/2013
+
+#Visite officielle du Président de la République
+```
+-center: [32.0804808, 34.7805274]
+-zoom: 7
+L.marker([32.0804808, 34.7805274]).actions.addRemove(S.map)
+```
+
+TEL AVIV, ISRAEL, 18/11/2013
+
+#Visite officielle du Président de la République
+```
+-center: [31.9030821, 35.1951741]
+-zoom: 7
+L.marker([31.9030821, 35.1951741]).actions.addRemove(S.map)
+```
+
+RAMALLAH, TERRITOIRES PALESTINIENS, 18/11/2013
+
+#Visite officielle du Président de la République
+```
+-center: [24.6319692, 46.7150648]
+-zoom: 7
+L.marker([24.6319692, 46.7150648]).actions.addRemove(S.map)
+```
+
+RIYAD, ARABIE SAOUDITE, 29/12/2013
+
+#Visite officielle du Président de la République
+```
+-center: [5.4091179, -4.0422098]
+-zoom: 7
+L.marker([5.4091179, -4.0422098]).actions.addRemove(S.map)
+```
+
+ABIDJAN, COTE D'IVOIRE, 17/07/2014
+
+</script></body></html>
